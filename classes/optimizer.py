@@ -1,24 +1,28 @@
-import json, sys, os
-import gurobipy as gp
+import json
+import os
+import sys
 from collections import defaultdict
 from contextlib import contextmanager
 
-import classes.participants
+import gurobipy as gp
+
+from . import participants
+
 
 @contextmanager
 def suppress_stdout():
     """
-    
+
 
     Returns
     -------
     None.
     """
-    
+
     with open(os.devnull, "w") as devnull:
         old_stdout = sys.stdout
         sys.stdout = devnull
-        try:  
+        try:
             yield
         finally:
             sys.stdout = old_stdout
@@ -59,12 +63,14 @@ class Optimizer:
         -------
         None.
         """
-        
+
         self.optiSettings = self.loadGurobiSettings()
         self.model = None
         self.results = None
         self.data = data
-        self.timesteps = range(int(self.data.time["clusterLength"] / self.data.time["timeResolution"]))
+        self.timesteps = range(
+            int(self.data.time["clusterLength"] / self.data.time["timeResolution"])
+        )
         self.cluster = cluster
         self.initializeModel()
         self.loadDevices()
@@ -82,7 +88,7 @@ class Optimizer:
             Optimization settings for the gurobi solver.
         """
 
-        optiSettings = json.load(open('data/gurobi_settings.json'))
+        optiSettings = json.load(open("data/gurobi_settings.json"))
 
         return optiSettings
 
@@ -94,7 +100,7 @@ class Optimizer:
         -------
         None.
         """
-        
+
         self.model = gp.Model(self.optiSettings["ModelName"])
 
     def loadDevices(self):
@@ -109,12 +115,18 @@ class Optimizer:
         # load the variables and constrains for all houses of the district into the model
         for id in range(len(self.data.district)):
             classObject = getattr(classes.participants.house, "House")
-            globals()["house"] = classObject(self.model, id, self.data.district[id], self.data.site, self.cluster)
+            globals()["house"] = classObject(
+                self.model, id, self.data.district[id], self.data.site, self.cluster
+            )
             self.model = globals()["house"].returnModel()
 
         # load the variables and constrains for the central energy unit of the district into the model
-        classObject = getattr(classes.participants.centralEnergyUnit, "CentralEnergyUnit")
-        globals()["centralEnergyUnit"] = classObject(self.model, len(self.data.district), self.data, self.cluster)
+        classObject = getattr(
+            classes.participants.centralEnergyUnit, "CentralEnergyUnit"
+        )
+        globals()["centralEnergyUnit"] = classObject(
+            self.model, len(self.data.district), self.data, self.cluster
+        )
         self.model = globals()["centralEnergyUnit"].returnModel()
 
         # load the variables and constrains for the aggregator of the district into the model
@@ -130,7 +142,7 @@ class Optimizer:
         -------
         None.
         """
-        
+
         self.model.setParam("NonConvex", self.optiSettings["NonConvex"])
         self.model.setParam("MIPGap", self.optiSettings["MIPGap"])
         self.model.setParam("TimeLimit", self.optiSettings["TimeLimit"])
@@ -152,8 +164,7 @@ class Optimizer:
 
         # set the sum of the total central costs of the district over all time steps as objective
         self.model.setObjective(
-            sum(C_total[t] for t in self.timesteps),
-            gp.GRB.MINIMIZE
+            sum(C_total[t] for t in self.timesteps), gp.GRB.MINIMIZE
         )
 
     def runOptimization(self):
@@ -192,15 +203,15 @@ class Optimizer:
         -------
         None.
         """
-        
+
         if self.model.status == gp.GRB.Status.INFEASIBLE:
             self.model.computeIIS()
-            f = open('errorfile.txt', 'w')
-            f.write('\nThe following constraint(s) cannot be satisfied:\n')
+            f = open("errorfile.txt", "w")
+            f.write("\nThe following constraint(s) cannot be satisfied:\n")
             for c in self.model.getConstrs():
                 if c.IISConstr:
-                    f.write('%s' % c.constrName)
-                    f.write('\n')
+                    f.write("%s" % c.constrName)
+                    f.write("\n")
             f.close()
 
         self.model.write("debug.lp")
@@ -214,7 +225,7 @@ class Optimizer:
         results : dictionary
             Contains results of the optimization.
         """
-        
+
         results = defaultdict(list)
         prev = ""
         for v in self.model.getVars():
@@ -243,7 +254,9 @@ class Optimizer:
             for subData in jsonData:
                 devices[subData["abbreviation"]] = {}
                 for subsubData in subData["specifications"]:
-                    devices[subData["abbreviation"]][subsubData["name"]] = subsubData["value"]
+                    devices[subData["abbreviation"]][subsubData["name"]] = subsubData[
+                        "value"
+                    ]
 
         # load data of central devices
         centralDevices = {}
@@ -252,7 +265,9 @@ class Optimizer:
             for subData in jsonData:
                 centralDevices[subData["abbreviation"]] = {}
                 for subsubData in subData["specifications"]:
-                    centralDevices[subData["abbreviation"]][subsubData["name"]] = subsubData["value"]
+                    centralDevices[subData["abbreviation"]][
+                        subsubData["name"]
+                    ] = subsubData["value"]
 
         # initialize dictionary for the results
         results = defaultdict(list)
@@ -261,11 +276,22 @@ class Optimizer:
         results["centralDevices"] = defaultdict(list)
 
         # add results of the aggregator
-        agg_var = ("P_dem_total", "P_inj_total", "P_dem_gcp", "P_inj_gcp", "C_total_central",
-                   "C_total_decentral", "Emi_total_central", "Emi_total_decentral", "P_gas_total")
+        agg_var = (
+            "P_dem_total",
+            "P_inj_total",
+            "P_dem_gcp",
+            "P_inj_gcp",
+            "C_total_central",
+            "C_total_decentral",
+            "Emi_total_central",
+            "Emi_total_decentral",
+            "P_gas_total",
+        )
         for v in agg_var:
             for t in self.timesteps:
-                results[v].append(round(self.model.getVarByName(v + "[" + str(t) + "]").x, 5))
+                results[v].append(
+                    round(self.model.getVarByName(v + "[" + str(t) + "]").x, 5)
+                )
 
         # add results of the buildings
         house_var = ("res_load", "res_inj", "res_gas")
@@ -273,7 +299,13 @@ class Optimizer:
             for id in range(len(self.data.district)):
                 for t in self.timesteps:
                     results[id][v].append(
-                        round(self.model.getVarByName(v + "_" + str(id) + "[" + str(t) + "]").x, 5))
+                        round(
+                            self.model.getVarByName(
+                                v + "_" + str(id) + "[" + str(t) + "]"
+                            ).x,
+                            5,
+                        )
+                    )
 
         # add results of the decentral devices
         dev_var = ("Q_th", "P_el", "P_gas", "ch", "dch", "soc")
@@ -288,15 +320,32 @@ class Optimizer:
                     for t in rangeTimesteps:
                         try:
                             results[id][str(dev) + "_" + v].append(
-                                round(self.model.getVarByName(v + "_" + str(id) + "[" + str(dev) + ","
-                                                              + str(t) + "]").x, 5))
+                                round(
+                                    self.model.getVarByName(
+                                        v
+                                        + "_"
+                                        + str(id)
+                                        + "["
+                                        + str(dev)
+                                        + ","
+                                        + str(t)
+                                        + "]"
+                                    ).x,
+                                    5,
+                                )
+                            )
                         except:
                             del results[id][str(dev) + "_" + v]
 
         # add results of the central devices
         central_dev_var = (
-            "Q_th_centralDevices", "P_el_centralDevices", "P_gas_centralDevices", "ch_centralDevices",
-            "dch_centralDevices", "soc_centralDevices")
+            "Q_th_centralDevices",
+            "P_el_centralDevices",
+            "P_gas_centralDevices",
+            "ch_centralDevices",
+            "dch_centralDevices",
+            "soc_centralDevices",
+        )
         for dev in centralDevices.keys():
             for v in central_dev_var:
                 if v == "soc_centralDevices":
@@ -307,7 +356,13 @@ class Optimizer:
                 for t in rangeTimesteps:
                     try:
                         results["centralDevices"][str(dev) + "_" + v[:-7]].append(
-                            round(self.model.getVarByName(v + "[" + str(dev) + "," + str(t) + "]").x, 5))
+                            round(
+                                self.model.getVarByName(
+                                    v + "[" + str(dev) + "," + str(t) + "]"
+                                ).x,
+                                5,
+                            )
+                        )
                     except:
                         del results["centralDevices"][str(dev) + "_" + v[:-7]]
 
@@ -327,7 +382,7 @@ class Optimizer:
         result : list
             Values for all time steps of the regarded variable.
         """
-        
+
         self.setResults()
 
         result = self.results[variableName]
@@ -342,6 +397,6 @@ class Optimizer:
         -------
         None.
         """
-        
+
         if not self.results:
             self.results = self.getResults()

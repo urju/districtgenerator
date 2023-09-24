@@ -4,14 +4,15 @@ import math
 import os
 import random as rd
 
-import functions.heating_profile_5R1C as heating
 import numpy as np
 import richardsonpy
 import richardsonpy.classes.appliance as app_model
 import richardsonpy.classes.lighting as light_model
 import richardsonpy.classes.stochastic_el_load_wrapper as wrap
-from classes.profils import Profiles
 from scipy.stats import truncpareto
+
+from ..functions import heating_profile_5R1C as heating
+from .profils import Profiles
 
 
 class Users:

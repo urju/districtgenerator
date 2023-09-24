@@ -1,12 +1,14 @@
 # import of the main classes
-from classes.datahandler import Datahandler
-from classes.optimizer import Optimizer
+from .datahandler import Datahandler
+
 # import of subclasses
-from classes.envelope import Envelope
-from classes.solar import Sun
-from classes.users import Users
-from classes.profils import Profiles
-from classes.system import BES
-from classes.plots import DemandPlots
+from .envelope import Envelope
+from .optimizer import Optimizer
+
 # import of participants as houses and the aggregator
 from .participants import *
+from .plots import DemandPlots
+from .profils import Profiles
+from .solar import Sun
+from .system import BES
+from .users import Users
