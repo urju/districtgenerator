@@ -185,10 +185,7 @@ class Datahandler:
 
         self.scenario_name = scenario_name
         self.scenario = pd.read_csv(
-            os.path.join(self.filePath, "scenarios")
-            + "/"
-            + self.scenario_name
-            + ".csv",
+            self.scenario_name,
             header=0,
             delimiter=";",
         )
@@ -227,7 +224,7 @@ class Datahandler:
         # %% create TEASER project
         # create one project for the whole district
         prj = Project(load_data=True)
-        prj.name = self.scenario_name
+        prj.name = os.path.splitext(os.path.basename(self.scenario_name))[0]
 
         for building in self.district:
             # convert short names into designation needed for TEASER
@@ -896,8 +893,9 @@ class Datahandler:
         -------
         None.
         """
-
-        with open(self.resultPath + "/" + self.scenario_name + ".p", "wb") as fp:
+        filename = os.path.splitext(os.path.basename(self.scenario_name))
+        save_path = os.path.splitext(self.scenario_name)[0]
+        with open(save_path + ".p", "wb") as fp:
             pickle.dump(self.district, fp, protocol=pickle.HIGHEST_PROTOCOL)
 
     def loadDistrict(self, scenario_name="example"):
@@ -913,11 +911,14 @@ class Datahandler:
         -------
         None.
         """
-
-        self.scenario_name = scenario_name
-
-        with open(self.resultPath + "/" + self.scenario_name + ".p", "rb") as fp:
-            self.district = pickle.load(fp)
+        if scenario_name == "example":
+            self.scenario_name = scenario_name
+            with open(self.resultPath + "/" + self.scenario_name + ".p", "rb") as fp:
+                self.district = pickle.load(fp)
+        else:
+            self.scenario_name == scenario_name
+            with open(self.scenario_name, "rb") as fp:
+                self.district = pickle.load(fp)
 
     def plot(
         self,
