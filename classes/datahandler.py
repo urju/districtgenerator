@@ -312,7 +312,7 @@ class Datahandler:
                         os.path.join(self.resultPath, "demands"),
                     )
 
-                print("Calculate demands of building " + building["unique_name"])
+                # print("Calculate demands of building " + building["unique_name"])
 
             else:
                 building["user"].loadProfiles(
