@@ -283,7 +283,7 @@ class Datahandler:
         """
 
         set = []
-        for building in self.district:
+        for idx, building in enumerate(self.district):
             # %% create unique building name
             # needed for loading and storing data with unique name
             # name is composed of building type, number of flats, serial number of building of this properties
@@ -312,7 +312,11 @@ class Datahandler:
                         os.path.join(self.resultPath, "demands"),
                     )
 
-                print("Calculate demands of building " + building["unique_name"])
+                print(
+                    "\tCalculate demands of building {}/{}".format(
+                        idx, len(self.district)
+                    )
+                )
 
             else:
                 building["user"].loadProfiles(
