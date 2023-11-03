@@ -314,7 +314,7 @@ class Datahandler:
 
                 print(
                     "\tCalculate demands of building {}/{}".format(
-                        idx, len(self.district)
+                        idx, len(self.district) - 1
                     )
                 )
 
@@ -346,7 +346,7 @@ class Datahandler:
                     building["unique_name"], os.path.join(self.resultPath, "demands")
                 )
 
-        print("Finished generating demands!")
+        # print("Finished generating demands!")
 
     def generateDistrictComplete(
         self,
