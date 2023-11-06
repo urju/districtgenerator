@@ -1,7 +1,10 @@
 [
   {
     "name": "location",
-    "value": [51.0,6.55],
+    "value": [
+      51.0,
+      6.55
+    ],
     "unit": "degree",
     "description": "Latitude, Longitude"
   },
@@ -31,7 +34,7 @@
   },
   {
     "name": "TRYYear",
-    "value": "TRY2015",
+    "value": "TRY2045",
     "unit": "-",
     "description": "Test referece year of DWD. Possible entries are TRY2015 and TRY2045."
   },
