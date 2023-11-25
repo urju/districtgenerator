@@ -34,7 +34,7 @@
   },
   {
     "name": "TRYYear",
-    "value": "TRY2045",
+    "value": "TRY2015",
     "unit": "-",
     "description": "Test referece year of DWD. Possible entries are TRY2015 and TRY2045."
   },
