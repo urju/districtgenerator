@@ -10,7 +10,7 @@
   },
   {
     "name": "climateZone",
-    "value": 0,
+    "value": 13,
     "unit": "-",
     "description": "Number of climate zone. 0 refers to Aachen. 1-15 refer to climate zones according to DWD."
   },
