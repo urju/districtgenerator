@@ -103,13 +103,17 @@ class Users:
             houses with one flat and two flats.
             The probability of having one or two flats is calculated from
             the german Zensus 2011 data.
+            For the graz energysharing and my diss, a single household must be present
+            in every building for legal reasons. Therefore, nb_flats is
+            always 1.
             """
-            prob = 0.793  # probability of a 1 flat SFH (2 flat = 1-0.793)
-            random = np.random.uniform(low=0, high=1, size=None)
-            if random <= prob:
-                self.nb_flats = 1
-            else:
-                self.nb_flats = 2
+            # prob = 0.793  # probability of a 1 flat SFH (2 flat = 1-0.793)
+            # random = np.random.uniform(low=0, high=1, size=None)
+            # if random <= prob:
+            #    self.nb_flats = 1
+            # else:
+            #    self.nb_flats = 2
+            self.nb_flats = 1
         elif self.building == "MFH":
             """
             The TABLUA building category "MFH" is comprised of houses with
