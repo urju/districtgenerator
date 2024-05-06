@@ -93,7 +93,7 @@ class Datahandler:
             first_row = 37
 
         weatherData = np.loadtxt(
-            os.path.join(self.filePath, "weather")
+            os.path.join(self.srcPath, "data", "weather")
             + "/"
             + self.site["TRYYear"]
             + "_Zone"
