@@ -242,7 +242,7 @@ class Datahandler:
                 name="ResidentialBuildingTabula",
                 year_of_construction=building["buildingFeatures"]["year"],
                 number_of_floors=3,
-                height_of_floors=3.125,
+                height_of_floors=2.4,
                 net_leased_area=building["buildingFeatures"]["area"],
                 construction_type=retrofit_level,
             )
