@@ -288,7 +288,10 @@ def calculate(zoneParameters, T_e, dt):
     # Extract parameters
     H_tr_is = zoneParameters.H_tr_is    # in W/K
     H_tr_ms = zoneParameters.H_tr_ms    # in W/K
-    H_tr_em = zoneParameters.H_tr_em[0]    # in W/K
+    if np.size(zoneParameters.H_tr_em) > 1:
+        H_tr_em = zoneParameters.H_tr_em[0]    # in W/K
+    else:
+        H_tr_em = float(np.asarray(zoneParameters.H_tr_em).reshape(-1)[0])
     H_tr_w  = zoneParameters.H_tr_w     # in W/K
     H_ve    = zoneParameters.H_ve       # in W/K
     C_m     = zoneParameters.C_m        # in J/K

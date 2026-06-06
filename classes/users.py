@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 
+import ast
 import math
 import os
 import random as rd
@@ -52,7 +53,7 @@ class Users:
         Heat demand for each building.
     """
 
-    def __init__(self, building, area):
+    def __init__(self, building, area, nb_flats=None, nb_occ=None):
         """
         Constructor of Users class.
 
@@ -62,6 +63,8 @@ class Users:
         """
 
         self.building = building
+        self._explicit_nb_flats = self._normalize_nb_flats(nb_flats)
+        self._explicit_nb_occ = self._normalize_nb_occ(nb_occ)
         self.nb_flats = None
         self.annual_el_demand = None
         self.lighting_index = []
@@ -72,12 +75,45 @@ class Users:
         self.elec = None
         self.gains = None
         self.heat = None
+        self.occ_by_flat = []
+        self.dhw_by_flat = []
+        self.elec_by_flat = []
+        self.gains_by_flat = []
 
         self.generate_number_flats()
         self.generate_number_occupants()
         self.generate_annual_el_consumption()
         self.generate_lighting_index()
         self.create_el_wrapper()
+
+    @staticmethod
+    def _is_missing(value):
+        if value is None:
+            return True
+        if isinstance(value, str) and value.strip() == "":
+            return True
+        try:
+            return bool(np.isnan(value))
+        except (TypeError, ValueError):
+            return False
+
+    @classmethod
+    def _normalize_nb_flats(cls, nb_flats):
+        if cls._is_missing(nb_flats):
+            return None
+        return int(nb_flats)
+
+    @classmethod
+    def _normalize_nb_occ(cls, nb_occ):
+        if cls._is_missing(nb_occ):
+            return None
+        if isinstance(nb_occ, str):
+            value = ast.literal_eval(nb_occ) if nb_occ.strip().startswith("[") else nb_occ
+        else:
+            value = nb_occ
+        if isinstance(value, (list, tuple, np.ndarray)):
+            return [int(item) for item in value]
+        return [int(value)]
 
     def generate_number_flats(self):
         """
@@ -96,6 +132,12 @@ class Users:
         -------
         None.
         """
+        if self._explicit_nb_flats is not None:
+            if self._explicit_nb_flats < 1:
+                raise ValueError("nb_flats must be at least 1.")
+            self.nb_flats = self._explicit_nb_flats
+            return
+
         # SFH and TH have the same procedure
         if self.building == "SFH" or self.building == "TH":
             """
@@ -168,6 +210,17 @@ class Users:
         -------
         None.
         """
+
+        if self._explicit_nb_occ is not None:
+            if len(self._explicit_nb_occ) == 1 and self.nb_flats > 1:
+                self.nb_occ = self._explicit_nb_occ * self.nb_flats
+            elif len(self._explicit_nb_occ) == self.nb_flats:
+                self.nb_occ = list(self._explicit_nb_occ)
+            else:
+                raise ValueError(
+                    "Length of explicit nb_occ must be 1 or match nb_flats."
+                )
+            return
 
         # probability table calculated from Zensus2011
         # probability for 6 inhabitants is subsumed as 5 inhabitants
@@ -302,7 +355,8 @@ class Users:
             #  Create wrapper object
             self.el_wrapper.append(wrap.ElectricityProfile(appliances, lights))
 
-    def calcProfiles(self, site, time_resolution, time_horizon, initial_day=1):
+    def calcProfiles(self, site, time_resolution, time_horizon, initial_day=1,
+                     generate_car_profile=True):
         """
         Calculate profiles for every flat and summarize them for the whole building
 
@@ -333,19 +387,34 @@ class Users:
         self.dhw = np.zeros(int(time_horizon / time_resolution))
         self.elec = np.zeros(int(time_horizon / time_resolution))
         self.gains = np.zeros(int(time_horizon / time_resolution))
-        self.car = np.zeros(int(time_horizon / time_resolution))
+        self.car = np.zeros(int(time_horizon / time_resolution)) if generate_car_profile else None
+        self.occ_by_flat = []
+        self.dhw_by_flat = []
+        self.elec_by_flat = []
+        self.gains_by_flat = []
         for j in range(self.nb_flats):
             temp_obj = Profiles(self.nb_occ[j], initial_day, nb_days, time_resolution)
-            self.occ = self.occ + temp_obj.generate_occupancy_profiles()
-            self.dhw = self.dhw + temp_obj.generate_dhw_profile()
-            self.elec = self.elec + temp_obj.generate_el_profile(
+            occ_profile = temp_obj.generate_occupancy_profiles()
+            dhw_profile = temp_obj.generate_dhw_profile()
+            elec_profile = temp_obj.generate_el_profile(
                 irradiance=irradiation,
                 el_wrapper=self.el_wrapper[j],
                 annual_demand=self.annual_el_demand[j],
             )
-            self.gains = self.gains + temp_obj.generate_gain_profile()
-        # currently only one car per building possible
-        self.car = self.car + temp_obj.generate_EV_profile()
+            gains_profile = temp_obj.generate_gain_profile()
+
+            self.occ_by_flat.append(occ_profile)
+            self.dhw_by_flat.append(dhw_profile)
+            self.elec_by_flat.append(elec_profile)
+            self.gains_by_flat.append(gains_profile)
+
+            self.occ = self.occ + occ_profile
+            self.dhw = self.dhw + dhw_profile
+            self.elec = self.elec + elec_profile
+            self.gains = self.gains + gains_profile
+        if generate_car_profile:
+            # currently only one car per building possible
+            self.car = self.car + temp_obj.generate_EV_profile()
 
     def calcHeatingProfile(self, site, envelope, time_resolution):
         """

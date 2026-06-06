@@ -34,7 +34,8 @@ class Envelope:
         SFH: single family house; TH: terraced house; MFH: multifamily house; AP: apartment block.
     """
 
-    def __init__(self, prj, building_params, construction_type, file_path):
+    def __init__(self, prj, building_params, construction_type, file_path,
+                 teaser_building_index=None):
         """
         Constructor of Envelope class.
 
@@ -62,6 +63,9 @@ class Envelope:
         self.retrofit = building_params["retrofit"]
         self.usage_short = building_params["building"]
         self.file_path = file_path
+        if teaser_building_index is None:
+            teaser_building_index = self.id
+        self.teaser_building_index = int(teaser_building_index)
         self.loadParams()
         self.loadComponentProperties(prj)
         self.loadAreas(prj)
@@ -426,29 +430,30 @@ class Envelope:
         None.
         """
 
-        self.V = prj.buildings[self.id].volume
+        building_ref = prj.buildings[self.teaser_building_index]
+
+        self.V = building_ref.volume
 
         self.A = {}  # in m2
-        self.A["f"] = prj.buildings[self.id].net_leased_area
+        self.A["f"] = building_ref.net_leased_area
 
         drct = ("south", "west", "north", "east")
         self.A["opaque"] = {}
-        self.A["opaque"]["south"] = prj.buildings[self.id].outer_area[0.0]
-        self.A["opaque"]["north"] = prj.buildings[self.id].outer_area[180.0]
+        self.A["opaque"]["south"] = building_ref.outer_area[0.0]
+        self.A["opaque"]["north"] = building_ref.outer_area[180.0]
         try:
-            self.A["opaque"]["west"] = prj.buildings[self.id].outer_area[90.0]
-            self.A["opaque"]["east"] = prj.buildings[self.id].outer_area[270.0]
+            self.A["opaque"]["west"] = building_ref.outer_area[90.0]
+            self.A["opaque"]["east"] = building_ref.outer_area[270.0]
         except KeyError:
             self.A["opaque"]["west"] = 0.0
             self.A["opaque"]["east"] = 0.0
 
         try:
-            self.A["opaque"]["roof"] = prj.buildings[self.id].outer_area[-1]
+            self.A["opaque"]["roof"] = building_ref.outer_area[-1]
         except KeyError:
-            self.A["opaque"]["roof"] = 1.2 * prj.buildings[
-                self.id].outer_area[-2]
+            self.A["opaque"]["roof"] = 1.2 * building_ref.outer_area[-2]
 
-        self.A["opaque"]["floor"] = prj.buildings[self.id].outer_area[-2]
+        self.A["opaque"]["floor"] = building_ref.outer_area[-2]
         self.A["opaque"]["wall"] = sum(self.A["opaque"][d] for d in drct)
 
         # Area of internal floor equals usable area
@@ -459,12 +464,11 @@ class Envelope:
         self.A["opaque"]["intWall"] = 1.5 * self.A["opaque"]["wall"]
 
         self.A["window"] = {}
-        self.A["window"]["south"] = prj.buildings[self.id].window_area[0.0]
-        self.A["window"]["north"] = prj.buildings[self.id].window_area[180.0]
+        self.A["window"]["south"] = building_ref.window_area[0.0]
+        self.A["window"]["north"] = building_ref.window_area[180.0]
         try:
-            self.A["window"]["west"] = prj.buildings[self.id].window_area[90.0]
-            self.A["window"]["east"] = prj.buildings[
-                self.id].window_area[270.0]
+            self.A["window"]["west"] = building_ref.window_area[90.0]
+            self.A["window"]["east"] = building_ref.window_area[270.0]
         except KeyError:
             self.A["window"]["west"] = 0.0
             self.A["window"]["east"] = 0.0
@@ -550,6 +554,9 @@ class Envelope:
 
         if SunRad is None:
             SunRad = []
+        SunRad = np.asarray(SunRad, dtype=float)
+        phi_int = np.asarray(internal_gains, dtype=float)
+
         self.C_m = sum((self.kappa["opaque"][x]
                         * self.A["opaque"][x]) for x in self.opaque)
         temp = self.C_m / self.A["f"]
@@ -595,8 +602,6 @@ class Envelope:
 
         # %% Internal gains phi_int[W]
         # simulated instead of using DIN EN ISO 13790, Table G.8, page 140
-        phi_int = internal_gains
-
         # heat flow phi_ia [W]
         # (DIN EN ISO 13790, section C2, page 110, eq. C.1)
         self.phi_ia = 0.5 * phi_int
@@ -623,11 +628,10 @@ class Envelope:
         # thermal radiation transfer
         # [kW/(m²*K)] DIN EN ISO 13790, section 11.4.6, page 73
         h_r_factor = 5.0  # W / (m²K)
-        self.h_r = {
-            ("opaque", "wall"): h_r_factor * np.array(self.epsilon["opaque"]["wall"]),
-            ("opaque", "roof"): h_r_factor * np.array(self.epsilon["opaque"]["roof"]),
-            ("opaque", "floor"): h_r_factor * np.array(self.epsilon["opaque"]["floor"]),
-            "window": h_r_factor * np.array(self.epsilon["window"])}
+        h_r_wall = h_r_factor * float(self.epsilon["opaque"]["wall"])
+        h_r_roof = h_r_factor * float(self.epsilon["opaque"]["roof"])
+        h_r_floor = h_r_factor * float(self.epsilon["opaque"]["floor"])
+        h_r_window = h_r_factor * float(self.epsilon["window"])
 
         # A_m (DIN EN ISO 13790, section 12.3.1.2, page 81, table 12)
         self.A_m = self.f_class["Am"] * self.A["f"]
@@ -651,111 +655,92 @@ class Envelope:
         # Heating period from October until May (important for T_i_appr)
         self.b_floor = (T_i_year - T_e_year) / (T_i_appr - T_e_mon)
 
-        self.b_tr = {"wall": np.ones(len(SunRad[0])),
-                     "roof": np.ones(len(SunRad[0])),
-                     "floor": np.zeros(len(SunRad[0]))}
-        self.b_tr["floor"][:] = self.b_floor
-
         # Mean difference between outdoor temperature and
         # the apparent sky-temperature
         # (DIN EN ISO 13790, section 11.4.6,  page 73)
         self.Delta_theta_er = 11  # [K]
 
-        # dictionary for irradiation to imitate sun blinds manually [kW/m²]
-        self.I_sol = {}
-        directions = ("south", "west", "north", "east", "roof")
-        for drct in range(len(directions)):
-            self.I_sol[directions[drct]] = SunRad[drct, :].copy()
-            self.I_sol["window", directions[drct]] = SunRad[drct, :].copy()
-
-        self.I_sol["floor"] = np.zeros_like(self.I_sol["roof"])
-        self.I_sol["window", "floor"] = np.zeros_like(self.I_sol["roof"])
-
         limit_shut_blinds = 100  # W/m²
-        for t in range(len(SunRad[0])):
-            for drct3 in range(len(directions)):  # for all directions
-                if SunRad[drct3, t] > limit_shut_blinds:
-                    self.I_sol["window", directions[drct3]][t] = 0.15 * SunRad[drct3, t].copy()
+        wall_directions = ("south", "west", "north", "east")
+        window_directions = ("south", "west", "north", "east", "roof")
 
-        # reference variables to reduce code length
-        A_j_k = {}
-        B_i_k = {}
+        wall_solar = SunRad[0:4, :]
+        roof_solar = SunRad[4, :]
+        window_solar = np.where(
+            SunRad[0:5, :] > limit_shut_blinds,
+            0.15 * SunRad[0:5, :],
+            SunRad[0:5, :],
+        )
 
-        direction = ("south", "west", "north", "east", "roof", "floor")
-        direction2 = ("wall", "roof", "floor")
-        direction3 = ("south", "west", "north", "east")
-        direction4 = ("roof", "floor")
+        wall_area = np.array(
+            [self.A["opaque"][drct] for drct in wall_directions],
+            dtype=float,
+        )
+        wall_f_r = np.array(
+            [self.F_r[drct] for drct in wall_directions],
+            dtype=float,
+        )
+        wall_term = (
+            self.U["opaque"]["wall"]
+            * self.R_se["opaque"]["wall"]
+            * (
+                self.alpha_Sc["opaque"]["wall"] * (wall_area @ wall_solar)
+                - h_r_wall * self.Delta_theta_er * np.sum(wall_area * wall_f_r)
+            )
+        )
 
-        for t in range(len(SunRad[0])):
-            # auxiliary variable for walls
-            for drct3 in direction3:
-                A_j_k[t, drct3] = (self.U["opaque"]["wall"]
-                                   * self.R_se["opaque"]["wall"]
-                                   * self.A["opaque"][drct3]
-                                   * (self.alpha_Sc["opaque"]["wall"]
-                                      * self.I_sol[drct3][t]
-                                      - self.h_r["opaque", "wall"] * self.F_r[
-                                          drct3] * self.Delta_theta_er))
+        roof_term = (
+            self.U["opaque"]["roof"]
+            * self.R_se["opaque"]["roof"]
+            * self.A["opaque"]["roof"]
+            * (
+                self.alpha_Sc["opaque"]["roof"] * roof_solar
+                - h_r_roof * self.F_r["roof"] * self.Delta_theta_er
+            )
+        )
 
-            # auxiliary variable for roof/ceiling
-            for drct4 in direction4:
-                A_j_k[t, drct4] = (self.U["opaque"][drct4]
-                                   * self.R_se["opaque"][drct4]
-                                   * self.A["opaque"][drct4]
-                                   * (self.alpha_Sc["opaque"][drct4]
-                                      * self.I_sol[drct4][t]
-                                      - self.h_r["opaque", drct4] * self.F_r[
-                                          drct4] * self.Delta_theta_er))
+        floor_term = (
+            self.U["opaque"]["floor"]
+            * self.R_se["opaque"]["floor"]
+            * self.A["opaque"]["floor"]
+            * (
+                self.alpha_Sc["opaque"]["floor"] * 0.0
+                - h_r_floor * self.F_r["floor"] * self.Delta_theta_er
+            )
+        )
 
-            for drct in direction:
-                B_i_k[t, drct] = self.A["window"][drct] \
-                                 * (self.g_gl["window"] * (1 - self.F_F)
-                                    * self.I_sol["window", drct][t]
-                                    * self.F_sh_gl - self.R_se["window"]
-                                    * self.U["window"] * self.h_r["window"]
-                                    * self.Delta_theta_er * self.F_r[drct])
+        window_area = np.array(
+            [self.A["window"][drct] for drct in window_directions],
+            dtype=float,
+        )
+        window_f_r = np.array(
+            [self.F_r[drct] for drct in window_directions],
+            dtype=float,
+        )
+        window_term = (
+            self.g_gl["window"]
+            * (1 - self.F_F)
+            * self.F_sh_gl
+            * (window_area @ window_solar)
+            - self.R_se["window"]
+            * self.U["window"]
+            * h_r_window
+            * self.Delta_theta_er
+            * np.sum(window_area * window_f_r)
+        )
 
-        phi_sol = {}
-        self.phi_m = {}
-        self.phi_st = {}
-        self.H_tr_em = {}
-        for t in range(len(SunRad[0])):
-            # heat flow phi_sol [kW]
-            # (DIN EN ISO 13790, section 11.3.2, page 67, eq. 43)
-            phi_sol[t] = (sum(A_j_k[t, drct3] for drct3 in direction3) +
-                          sum(A_j_k[t, drct4] for drct4 in direction4) +
-                          sum(B_i_k[t, drct] for drct in direction)
-                          )
+        phi_sol = wall_term + roof_term + floor_term + window_term
+        common_heat_input = 0.5 * phi_int + phi_sol
+        am_ratio = self.A_m / self.A_tot
 
-            # heat flow phi_m [kW]
-            # (DIN EN ISO 13790, section C2, page 110, eq. C.2)
-            self.phi_m[t] = (self.A_m / self.A_tot * 0.5 * phi_int[t] +
-                             1.0 / self.A_tot * self.A["f"] *
-                             (sum(
-                                 self.f_class["Am"] * A_j_k[t, drct3] for drct3
-                                 in direction3)
-                              + sum(self.f_class["Am"] * A_j_k[t, drct4] for
-                                    drct4 in direction4)
-                              + sum(self.f_class["Am"] * B_i_k[t, drct] for
-                                    drct in direction)
-                              ))
+        self.phi_m = am_ratio * common_heat_input
+        self.phi_st = (1.0 - am_ratio - self.H_tr_w / (9.1 * self.A_tot)) * common_heat_input
 
-            # heat flow phi_st [kW]
-            # (DIN EN ISO 13790, section C2, page 110, eq. C.3)
-            self.phi_st[t] = (0.5 * phi_int[t] + phi_sol[t] - self.phi_m[t] -
-                              self.H_tr_w / 9.1 / self.A_tot * 0.5 * phi_int[t] -
-                              1.0 / 9.1 / self.A_tot * self.A["window"]["sum"] *
-                              (sum(self.U["window"] * A_j_k[t, drct3] for drct3
-                                   in direction3)
-                               + sum(self.U["window"] * A_j_k[t, drct4] for
-                                     drct4 in direction4)
-                               + sum(self.U["window"] * B_i_k[t, drct] for drct
-                                     in direction)
-                               ))
-
-            # thermal transmittance coefficient H_tr_em [W/K]
-            # Simplification: H_tr_em = H_tr_op
-            # (DIN EN ISO 13790, section 8.3, page 43)
-            self.H_tr_em[t] = sum(self.A["opaque"][drct2]
-                                  * self.U["opaque"][drct2] * self.b_tr[drct2][t]
-                                  for drct2 in direction2)
+        # thermal transmittance coefficient H_tr_em [W/K]
+        # Simplification: H_tr_em = H_tr_op
+        # (DIN EN ISO 13790, section 8.3, page 43)
+        self.H_tr_em = (
+            self.A["opaque"]["wall"] * self.U["opaque"]["wall"]
+            + self.A["opaque"]["roof"] * self.U["opaque"]["roof"]
+            + self.A["opaque"]["floor"] * self.U["opaque"]["floor"] * self.b_floor
+        )

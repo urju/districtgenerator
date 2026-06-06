@@ -126,27 +126,37 @@ class Datahandler:
         self.time["timeSteps"] = int(
             self.time["dataLength"] / self.time["timeResolution"]
         )
+        source_time_axis = np.arange(
+            0,
+            len(temp_sunDirect) * self.time["dataResolution"],
+            self.time["dataResolution"],
+        )
+        target_time_axis = np.arange(
+            0,
+            self.time["dataLength"] + 1,
+            self.time["timeResolution"],
+        )
 
         # interpolate input data to achieve required data resolution
         # transformation from values for points in time to values for time intervals
         self.site["SunDirect"] = np.interp(
-            np.arange(0, self.time["dataLength"] + 1, self.time["timeResolution"]),
-            np.arange(0, self.time["dataLength"] + 1, self.time["dataResolution"]),
+            target_time_axis,
+            source_time_axis,
             temp_sunDirect,
         )[0:-1]
         self.site["SunDiffuse"] = np.interp(
-            np.arange(0, self.time["dataLength"] + 1, self.time["timeResolution"]),
-            np.arange(0, self.time["dataLength"] + 1, self.time["dataResolution"]),
+            target_time_axis,
+            source_time_axis,
             temp_sunDiff,
         )[0:-1]
         self.site["T_e"] = np.interp(
-            np.arange(0, self.time["dataLength"] + 1, self.time["timeResolution"]),
-            np.arange(0, self.time["dataLength"] + 1, self.time["dataResolution"]),
+            target_time_axis,
+            source_time_axis,
             temp_temp,
         )[0:-1]
         self.site["wind_speed"] = np.interp(
-            np.arange(0, self.time["dataLength"] + 1, self.time["timeResolution"]),
-            np.arange(0, self.time["dataLength"] + 1, self.time["dataResolution"]),
+            target_time_axis,
+            source_time_axis,
             temp_wind,
         )[0:-1]
 
@@ -191,13 +201,13 @@ class Datahandler:
         )
 
         # initialize buildings for scenario
-        # loop over all buildings
-        for id in self.scenario["id"]:
+        # loop over all buildings in file order instead of relying on a matching DataFrame index
+        for _, scenario_row in self.scenario.iterrows():
             # create empty dict for observed building
             building = {}
 
             # store features of the observed building
-            building["buildingFeatures"] = self.scenario.loc[id]
+            building["buildingFeatures"] = scenario_row
 
             # append building to district
             self.district.append(building)
@@ -254,13 +264,22 @@ class Datahandler:
                 building_params=building["buildingFeatures"],
                 construction_type=retrofit_level,
                 file_path=self.filePath,
+                teaser_building_index=len(prj.buildings) - 1,
             )
 
             # %% create user object
             # containing number occupants, electricity demand,...
+            n_flats = building["buildingFeatures"].get("n_flats", None)
+            if pd.isna(n_flats):
+                n_flats = None
+            n_occ = building["buildingFeatures"].get("n_occ", None)
+            if pd.isna(n_occ):
+                n_occ = None
             building["user"] = Users(
                 building=building["buildingFeatures"]["building"],
                 area=building["buildingFeatures"]["area"],
+                nb_flats=n_flats,
+                nb_occ=n_occ,
             )
 
     def generateDemands(self, calcUserProfiles=True, saveUserProfiles=True):
